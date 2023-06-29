@@ -1,4 +1,4 @@
-# import graphlib
+
 from io import open
 import os
 from argparse import ArgumentParser, FileType, ArgumentDefaultsHelpFormatter
@@ -9,13 +9,13 @@ from asyncio import DatagramProtocol
 import numpy as np
 from scipy.sparse import *
 from sklearn import preprocessing
-# torch训练库
+
 import torch
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-# graph类
+
 import networkx as nx
 from networkx.algorithms import bipartite
 import matplotlib.pyplot as plt
@@ -24,7 +24,7 @@ import UVDecVectors
 import utils
 import evaluating_indicator
 
-# 数据处理
+
 class DataUtils(object):
     def __init__(self, model_path):
         self.model_path = model_path
@@ -43,7 +43,7 @@ class DataUtils(object):
                 line = fin.readline()
         return user,item,rate
 
-# 设置种子
+
 def set_rng_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -86,7 +86,7 @@ def computeResult(test_data,model,itemlist):
         node_list_u_[str(i)] = {}
         node_list_u_[str(i)]['embedding_vectors']= item.cpu().detach().numpy()
         i+=1
-    # 对于v 需要在这里映射一下
+
     i = 0
     for item in model.v.weight:
         node_list_v_[str(itemlist[i])] = {}
@@ -101,7 +101,7 @@ class NeibSampler:
     def __init__(self, graph, nb_size, include_self=False):
         n = graph.number_of_nodes()
         print("节点数量：", n)
-        # assert 0 <= min(graph.nodes()) and max(graph.nodes()) < n
+
         if include_self:
             nb_all = torch.zeros(n, nb_size + 1, dtype=torch.int64)#[节点数量,邻居数量+1] 包括自己的情况
             nb_all[:, 0] = torch.arange(0, n)
@@ -113,7 +113,7 @@ class NeibSampler:
         for v in range(n):
             nb_v = sorted(graph.neighbors(v))
             if len(nb_v) <= nb_size:
-                nb_v.extend([-1] * (nb_size - len(nb_v))) #-1加到末尾
+                nb_v.extend([-1] * (nb_size - len(nb_v))) 
                 nb[v] = torch.LongTensor(nb_v)
             else:
                 popkids.append(v)
@@ -133,7 +133,7 @@ class NeibSampler:
         nb[self.pk] = torch.from_numpy(pk_nb).to(nb.device)
         return self.nb_all
 
-# 线性输入层 zik = WTu+b 网络参数
+
 class InputLinear(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(InputLinear, self).__init__()
@@ -168,30 +168,30 @@ class RoutingConv(nn.Module):
         if self._cache_zero_d.device != dev:
             self._cache_zero_d = self._cache_zero_d.to(dev)
             self._cache_zero_k = self._cache_zero_k.to(dev)
-        n, m = x.size(0), neighbors.size(0) // x.size(0) # n=x的长度 m=邻域采样数
-        d, k, delta_d = self.d, self.k, self.d // self.k # 分别为d向量维度 k个方面 每个方面delta_d维
-        z = torch.cat([x, self._cache_zero_d], dim=0) # 1z torch.Size([6002, 128])，z为x后面加上一行全零向量
-        z = z[neighbors].view(n, m, k, delta_d) # 通过neighbors中的邻居ID将邻居的表示向量提取出来，转化为节点长度*邻域采样数*k方面*每方面维数
+        n, m = x.size(0), neighbors.size(0) // x.size(0) 
+        d, k, delta_d = self.d, self.k, self.d // self.k 
+        z = torch.cat([x, self._cache_zero_d], dim=0) 
+        z = z[neighbors].view(n, m, k, delta_d) 
         u = None
-        for clus_iter in range(max_iter): # 路由迭代次数
+        for clus_iter in range(max_iter):
             if u is None:
-                p = self._cache_zero_k.expand(n * m, k).view(n, m, k) # 相似度权重p初始化为长度*邻域采样数*k方面的零向量
+                p = self._cache_zero_k.expand(n * m, k).view(n, m, k)
             else:
-                p = torch.sum(z * u.view(n, 1, k, delta_d), dim=3) # p_(uc,k)←Z_(uc,k)^⊤*c_(u,k)/τ
+                p = torch.sum(z * u.view(n, 1, k, delta_d), dim=3) 
                 # print("softmaxp",z)
             p = F.softmax(p, dim=2)
-            u = torch.sum(z * p.view(n, m, k, 1), dim=1) # torch.Size([6001, 8, 16])，∑_(u:(u,uc)∈M)〖p_(uc,k)*z_(u,k) 〗
-            u = self.a*u + x.view(n, k, delta_d) # torch.Size([6001, 8, 16])，z_(u,k)+∑
+            u = torch.sum(z * p.view(n, m, k, 1), dim=1) 
+            u = self.a*u + x.view(n, k, delta_d)
             if clus_iter < max_iter - 1:
                 u = F.normalize(u, dim=2) # 如果不是最后一次，得到的表示向量就进行L2归一化
-        # print("最终u",u.shape,u)
+
         return u.view(n, d)
 
 # 二分图解离卷积网络
 class BiDisen(nn.Module):
     def __init__(self, args,G,M,N,u0,v0,duser,ditemid,drate):
         super(BiDisen, self).__init__()
-        self.k = args.k # k个潜在因子（胶囊网络），nhidden：k内隐藏单元数
+        self.k = args.k
         self.a = args.a
         self.b = args.b
         # self.hid_dim = args.nhidden * args.k
@@ -199,8 +199,8 @@ class BiDisen(nn.Module):
 
         dev = torch.device(args.dev)
         self.G,self.M,self.N= G.to(dev),M.to(dev),N.to(dev)
-        self.M = self.M/torch.sum(self.M,1).unsqueeze(-1) #手动归一化
-        self.N = self.N/torch.sum(self.N,1).unsqueeze(-1) #手动归一化
+        self.M = self.M/torch.sum(self.M,1).unsqueeze(-1) 
+        self.N = self.N/torch.sum(self.N,1).unsqueeze(-1) 
         self.mlen = self.M.size(0)
         self.nlen = self.N.size(0)
         self.duser,self.ditemid,self.drate = duser,ditemid,drate
@@ -213,8 +213,8 @@ class BiDisen(nn.Module):
         self.u.weight.data = self.u.weight.data.to(dev)
         
         conv_ls = []
-        for i in range(args.nlayer): # L个DisenConv层
-            conv = RoutingConv(self.hid_dim, self.k,self.a) # forward(self.x, neighbors, max_iter):
+        for i in range(args.nlayer):
+            conv = RoutingConv(self.hid_dim, self.k,self.a) 
             self.add_module('conv_%d' % i, conv)
             conv_ls.append(conv)
         self.conv_ls = conv_ls
@@ -227,11 +227,11 @@ class BiDisen(nn.Module):
         return F.dropout(x, self.dropout, training=self.training)
 
     def forward(self,neiberm,neibern,u,v):
-        neiberm = neiberm.view(-1)   # 邻居调整为1维tensor
-        neibern = neibern.view(-1)   # 邻居调整为1维tensor
+        neiberm = neiberm.view(-1) 
+        neibern = neibern.view(-1)
         user_emb = self.u.weight.data
         item_emb = self.v.weight.data
-        ui_emb = torch.cat([user_emb, item_emb], dim=0)   # (n_users + n_items, rep_dim)
+        ui_emb = torch.cat([user_emb, item_emb], dim=0) 
         nbs = torch.cat([neiberm, neibern.add(self.mlen)], dim=0)
         
         for conv in self.conv_ls:
@@ -246,13 +246,13 @@ class BiDisen(nn.Module):
         self.u.weight.data = self.u.weight.data.to(dev)
         self.v.weight.data = self.v.weight.data.to(dev)
         # 一阶KLloss
-        pr = torch.mul(self.u(self.duser.to(dev)),self.v(self.ditemid.to(dev))) # [17699 128]
-        pr = torch.sum(pr, dim=1) # [17699]
+        pr = torch.mul(self.u(self.duser.to(dev)),self.v(self.ditemid.to(dev))) 
+        pr = torch.sum(pr, dim=1) 
         positivebatch = F.logsigmoid(pr)
         # 二阶KLloss
         um = torch.mm(self.u.weight,self.u.weight.t())
         vm = torch.mm(self.v.weight,self.v.weight.t())
-        tu = torch.sigmoid(um)# 先进行一次sigmoid计算
+        tu = torch.sigmoid(um)
         logp_x_u = F.log_softmax(tu.float().to(dev), dim=-1)
         p_y_u = F.softmax(self.M.float().to(dev), dim=-1)
         kl_sum_u = F.kl_div(logp_x_u.float().to(dev), p_y_u.float().to(dev), reduction='sum') 
@@ -280,10 +280,10 @@ if __name__ == '__main__':
     parser.add_argument('--b', type=float, default=0.1,help='Loss allocation parameter.') #路由时的迭代次数
     parser.add_argument('--nbsz', type=int, default=128,help='Size of the sampled neighborhood.') #采样的邻域的大小
     parser.add_argument('--nepoch', type=int, default=50,help='Max number of epochs to train.') #最大迭代次数
-    # parser.add_argument('--early', type=int, default=25,help='Extra iterations before early-stopping.') #最少迭代次数
+
     args = parser.parse_args()
     dev = torch.device(args.dev)
-    # 读取数据
+    
     print('========== 处理数据 ===========')
     model_path = os.path.join('./')
     dul = DataUtils(model_path)
@@ -299,7 +299,7 @@ if __name__ == '__main__':
     Rmat = csr_matrix((drate, (duserid, ditemid))) # csr稠密矩阵
     rsp = Rmat.todense()
     # filt = torch.from_numpy(rsp).to(dev) # 得到有交互筛选矩阵
-    G = torch.from_numpy(rsp)# 稀疏矩阵，行为用户，列为项目
+    G = torch.from_numpy(rsp)
     Gmean = torch.mean(G.float())
     # graph = nx_graph_from_biadjacency_matrix(Rmat) # 构建一阶异构networkx图
     ulen,vlen = G.shape[0],len(item)
@@ -309,7 +309,7 @@ if __name__ == '__main__':
     M,N = torch.mm(G, G.t()),torch.mm(G.t(),G)
     graphm = nx.from_numpy_array(M.numpy())
     graphn = nx.from_numpy_array(N.numpy())
-    # print("graphm",graphm,"graphn",graphn)
+
     neiberm = NeibSampler(graphm,args.nbsz).sample().to(dev)  # 邻居采样
     neibern = NeibSampler(graphn,args.nbsz).sample().to(dev)
     # neib_savm = torch.zeros_like(neiberm) # 储存邻居
@@ -331,23 +331,19 @@ if __name__ == '__main__':
     print('========== 迭代训练 ===========')
     best_ndcg = 0
     for t in range(args.nepoch):
-        # TODO 储存模型
+
         model.train()
         optmz.zero_grad()
-        u,v,loss,pr = model(neiberm,neibern,u0,v0) # 取得用户和项目的表示向量
+        u,v,loss,pr = model(neiberm,neibern,u0,v0)
         print('+++第%2d次loss: %.4f' % (t,loss)) 
-        # 计算效果
         _, _, _, mndcg = computeResult(test_data,model,item)
         if((mndcg>best_ndcg)&(mndcg>0)):
             best_ndcg = mndcg
         if(best_ndcg>0)&(mndcg<best_ndcg*0.995):
             break
-        # u0,v0 = u,v
         loss.backward()
         optmz.step()
         
-    
-    # 对所有代进行垃圾回收（从内存中释放超出作用范围的变量，不再使用的对象等）
     # print('========== 垃圾回收 ===========')
     import gc
     gc.collect()
